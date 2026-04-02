@@ -26,7 +26,8 @@
 -- ──────────────────────────────────────────────────────────────────────────
 -- Config  (change these before deploying)
 -- ──────────────────────────────────────────────────────────────────────────
-local API_URL    = "https://your-api-domain.com/check"   -- Flask /check endpoint
+local API_URL = "https://roblox-keys-b10k.onrender.com/check"
+   -- Flask /check endpoint
 local API_SECRET = "change_me_super_secret_token"        -- Same as API_MASTER_TOKEN
 
 -- The main script loaded ONLY on successful validation.
