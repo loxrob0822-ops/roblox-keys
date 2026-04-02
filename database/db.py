@@ -88,15 +88,30 @@ def _duration_to_seconds(duration: str) -> float | None:
     duration = duration.strip().lower()
     if duration in ("lifetime", "perm", "permanent"):
         return None
-    unit = duration[-1]
-    try:
-        value = float(duration[:-1])
-    except ValueError:
-        raise ValueError(f"Invalid duration format: '{duration}'. Use e.g. '1h', '7d', '30m', 'lifetime'.")
+    
+    # Check for multi-character units first (like 'mo' for month)
+    if duration.endswith("mo"):
+        unit = "mo"
+        value_str = duration[:-2]
+    else:
+        unit = duration[-1]
+        value_str = duration[:-1]
 
-    multipliers = {"m": 60, "h": 3600, "d": 86400}
+    try:
+        value = float(value_str)
+    except ValueError:
+        raise ValueError(f"Invalid duration format: '{duration}'. Use e.g. '30m', '12h', '7d', '1mo', 'lifetime'.")
+
+    multipliers = {
+        "m": 60,            # Minutes
+        "h": 3600,          # Hours
+        "d": 86400,         # Days
+        "mo": 2592000,      # Months (30 Days)
+    }
+    
     if unit not in multipliers:
-        raise ValueError(f"Unknown time unit '{unit}'. Use m, h, or d.")
+        raise ValueError(f"Unknown time unit '{unit}'. Use m, h, d, or mo (for months).")
+    
     return value * multipliers[unit]
 
 
