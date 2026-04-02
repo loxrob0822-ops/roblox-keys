@@ -72,7 +72,11 @@ class LicenseBot(commands.Bot):
         guild = discord.Object(id=GUILD_ID)
         self.tree.copy_global_to(guild=guild)
         await self.tree.sync(guild=guild)
-        logger.info("[SUCCESS] Slash commands synced to Server ID: %s", GUILD_ID)
+        
+        # Register the persistent view so the button works after bot restart
+        self.add_view(ControlPanelView())
+        
+        logger.info("[SUCCESS] Slash commands & Persistent Views synced to Server ID: %s", GUILD_ID)
 
 bot = LicenseBot()
 
@@ -136,6 +140,57 @@ async def log_action(interaction: discord.Interaction, description: str):
                           color=discord.Color.blurple(), timestamp=datetime.now(tz=timezone.utc))
     embed.set_footer(text=f"By {interaction.user} (#{interaction.channel})")
     await channel.send(embed=embed)
+
+# ─────────────────────────────────────────────
+# UI Components (Views/Buttons)
+# ─────────────────────────────────────────────
+
+class ControlPanelView(discord.ui.View):
+    """
+    Persistent view for the Control Panel.
+    Contains a 'Get Script' button that checks whitelist status.
+    """
+    def __init__(self):
+        super().__init__(timeout=None) # timeout=None makes it persistent if added to setup_hook
+
+    @discord.ui.button(label="📜 Get Script", style=discord.ButtonStyle.primary, custom_id="btn_get_script")
+    async def get_script(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        
+        # 1. Check if user has an active key
+        result = api_post("listkeys", {"discord_id": str(interaction.user.id)})
+        
+        if "error" in result:
+            await interaction.followup.send(f"❌ **API Error**: {result['error']}", ephemeral=True)
+            return
+
+        # Filter for active keys
+        active_keys = [k for k in result.get("keys", []) if k["status"] == "active"]
+        
+        if not active_keys:
+            await interaction.followup.send(
+                "❌ **Not Whitelisted**\n"
+                "You do not have an active license. Please contact an Admin to purchase access.",
+                ephemeral=True
+            )
+            return
+
+        # 2. Get the most recent active key
+        key_data = active_keys[0]
+        key_str  = key_data["key"]
+        expires  = unix_to_readable(key_data["expires_at"])
+        
+        loader_str = f'script_key="{key_str}";\nloadstring(game:HttpGet("{API_BASE_URL}/loader.lua"))()'
+        
+        # 3. Send the private response
+        embed = discord.Embed(title="🛡️ Your License Information", color=discord.Color.green())
+        embed.add_field(name="Current Key", value=f"`{key_str}`", inline=False)
+        embed.add_field(name="1-Line Loader", value=f"```lua\n{loader_str}```", inline=False)
+        embed.add_field(name="Expires", value=expires, inline=True)
+        embed.set_footer(text="Keep this key private! Never share it with others.")
+        
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
 
 # ─────────────────────────────────────────────
 # Slash Commands
@@ -225,6 +280,27 @@ async def listkeys(interaction: discord.Interaction, member: Optional[discord.Me
     embed = discord.Embed(title=f"🗝️ License Keys ({len(keys)})", description="\n".join(lines), color=discord.Color.blurple())
     
     await interaction.followup.send(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="setup_panel", description="Deploy the Control Panel to the current channel (Admin)")
+@is_staff()
+async def setup_panel(interaction: discord.Interaction):
+    """Post the persistent Control Panel embed."""
+    embed = discord.Embed(
+        title="💠 Astrix Hub | Control Panel", 
+        description=(
+            "Welcome to the **Astrix Pls Donate** access panel.\n\n"
+            "If you have already purchased a license, click the button below to retrieve your script and key instantly.\n\n"
+            "**Note:** Your key must be active and whitelisted by an Admin."
+        ),
+        color=discord.Color.blue()
+    )
+    embed.add_field(name="📜 Get Script", value="Retrieves your unique loader and active license key.", inline=True)
+    embed.set_footer(text=f"Sent by {interaction.user}", icon_url=interaction.user.display_avatar.url)
+    
+    view = ControlPanelView()
+    await interaction.response.send_message("✅ Control Panel deployed.", ephemeral=True)
+    await interaction.channel.send(embed=embed, view=view)
+    await log_action(interaction, "Deployed Control Panel")
 
 # ─────────────────────────────────────────────
 # Events
