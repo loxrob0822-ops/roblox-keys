@@ -199,8 +199,8 @@ class ControlPanelView(discord.ui.View):
 @bot.tree.command(name="genkey", description="Generate a NEW license key (e.g., 30m, 12h, 7d, 1mo, lifetime)")
 @is_staff()
 async def genkey(interaction: discord.Interaction, member: discord.Member, duration: str, note: Optional[str] = None):
-    # Set ephemeral=False so the customer in the ticket can see the key!
-    await interaction.response.defer(ephemeral=False)
+    # Hide the sensitive key from everyone except the Admin
+    await interaction.response.defer(ephemeral=True)
     
     result = api_post("generate", {
         "discord_id": str(member.id),
@@ -209,7 +209,7 @@ async def genkey(interaction: discord.Interaction, member: discord.Member, durat
     })
 
     if "error" in result:
-        await interaction.followup.send(f"[ERROR] {result['error']}", ephemeral=False)
+        await interaction.followup.send(f"[ERROR] {result['error']}", ephemeral=True)
         return
 
     key_data = result["key"]
@@ -224,7 +224,16 @@ async def genkey(interaction: discord.Interaction, member: discord.Member, durat
     embed.add_field(name="Expires", value=expires, inline=True)
     embed.add_field(name="Duration", value=duration, inline=True)
     
-    await interaction.followup.send(embed=embed, ephemeral=False)
+    # Send the private response to the Admin
+    await interaction.followup.send(embed=embed, ephemeral=True)
+
+    # Send a PUBLIC notification to the channel
+    notify_embed = discord.Embed(
+        description=f"✅ {member.mention} **has been whitelisted!**\nYou can now click the **'Get Script'** button on the panel to get started.",
+        color=discord.Color.blue()
+    )
+    await interaction.channel.send(content=member.mention, embed=notify_embed)
+
     await log_action(interaction, f"Generated key `{key_str}` for {member}")
 
 @bot.tree.command(name="keyinfo", description="Lookup license key details (Private)")
