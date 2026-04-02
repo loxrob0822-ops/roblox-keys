@@ -23,8 +23,9 @@ import time
 from datetime import datetime, timezone
 
 import discord
-from discord.ext import commands
 import requests
+from discord import app_commands
+from discord.ext import commands
 from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
@@ -90,9 +91,9 @@ def api_post(endpoint: str, payload: dict) -> dict:
             headers=API_HEADERS,
             timeout=60,
         )
-        if resp.status_code == 200:
+        if resp.status_code in (200, 201):
             return resp.json()
-        elif resp.status_code == 503 or resp.status_code == 502:
+        elif resp.status_code in (503, 502):
             return {"error": "The API is still waking up... Please try again in 10-20 seconds."}
         else:
             return {"error": f"API Error {resp.status_code}: {resp.text[:100]}"}
