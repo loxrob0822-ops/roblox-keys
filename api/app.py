@@ -334,15 +334,19 @@ def _cleanup_loop(interval: int = 600):
 
 
 # ─────────────────────────────────────────────
-# Entry point
+# Initialization
 # ─────────────────────────────────────────────
+
+# Initialize the database (tables, etc.)
+initialize_db()
+
+# Start background cleanup thread (daemon so it dies with the process)
+cleaner = threading.Thread(target=_cleanup_loop, args=(600,), daemon=True)
+cleaner.start()
+logger.info("Cleanup thread started.")
+
 if __name__ == "__main__":
-    initialize_db()
-
-    # Start background cleanup thread (daemon so it dies with the process)
-    cleaner = threading.Thread(target=_cleanup_loop, args=(600,), daemon=True)
-    cleaner.start()
-
+    # When running locally via 'python app.py'
     port = int(os.environ.get("PORT", 5000))
-    logger.info("Starting Flask API on port %d …", port)
+    logger.info("Starting Flask API on port %d [LOCAL MODE] …", port)
     app.run(host="0.0.0.0", port=port, debug=False)
