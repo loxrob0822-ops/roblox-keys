@@ -86,33 +86,31 @@ def _duration_to_seconds(duration: str) -> float | None:
         'lifetime' | 'perm' → None (no expiry)
     """
     duration = duration.strip().lower()
-    if duration in ("lifetime", "perm", "permanent"):
+    if duration in ("lifetime", "perm", "permanent", "inf", "infinity"):
         return None
     
-    # Check for multi-character units first (like 'mo' for month)
-    if duration.endswith("mo"):
-        unit = "mo"
-        value_str = duration[:-2]
-    else:
-        unit = duration[-1]
-        value_str = duration[:-1]
+    # Extract numeric part and unit part
+    import re
+    match = re.match(r"([0-9.]+)\s*([a-z]+)", duration)
+    if not match:
+        raise ValueError(f"Invalid duration format: '{duration}'. Use e.g. '15m', '12h', '7d', '1mo'.")
+    
+    value = float(match.group(1))
+    unit_str = match.group(2)
 
-    try:
-        value = float(value_str)
-    except ValueError:
-        raise ValueError(f"Invalid duration format: '{duration}'. Use e.g. '30m', '12h', '7d', '1mo', 'lifetime'.")
-
+    # Smart mapping
     multipliers = {
-        "m": 60,            # Minutes
-        "h": 3600,          # Hours
-        "d": 86400,         # Days
-        "mo": 2592000,      # Months (30 Days)
+        60:      ["m", "min", "mins", "minute", "minutes"],
+        3600:    ["h", "hr", "hrs", "hour", "hours"],
+        86400:   ["d", "day", "days"],
+        2592000: ["mo", "month", "months", "mon"],
     }
     
-    if unit not in multipliers:
-        raise ValueError(f"Unknown time unit '{unit}'. Use m, h, d, or mo (for months).")
-    
-    return value * multipliers[unit]
+    for mult, aliases in multipliers.items():
+        if unit_str in aliases:
+            return value * mult
+            
+    raise ValueError(f"Unknown time unit '{unit_str}'. Try m, h, d, or mo.")
 
 
 # ─────────────────────────────────────────────
