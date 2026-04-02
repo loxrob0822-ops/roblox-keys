@@ -23,7 +23,8 @@ import time
 import threading
 from functools import wraps
 
-from flask import Flask, request, jsonify
+import requests
+from flask import Flask, request, jsonify, Response
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
@@ -75,6 +76,14 @@ except ImportError:
 API_MASTER_TOKEN = os.environ.get("API_MASTER_TOKEN", "change_me_super_secret_token")
 # A secondary token just for reading key-info from the bot (optional same token)
 BOT_READ_TOKEN   = os.environ.get("BOT_READ_TOKEN", API_MASTER_TOKEN)
+# The raw script URL that will be delivered upon successful validation
+MAIN_SCRIPT_URL  = os.environ.get("MAIN_SCRIPT_URL", "")
+
+# ─────────────────────────────────────────────
+# Cache for the script payload
+# ─────────────────────────────────────────────
+_payload_cache = {"content": None, "expiry": 0}
+PAYLOAD_CACHE_TTL = 300  # 5 minutes
 
 
 # ─────────────────────────────────────────────
@@ -143,6 +152,22 @@ def index():
 def health():
     """Simple health-check — no auth required."""
     return jsonify({"status": "ok", "ts": time.time()})
+
+
+@app.route("/loader.lua", methods=["GET"])
+def loader():
+    """
+    Serve the Roblox loader script.
+    Roblox users run: loadstring(game:HttpGet(".../loader.lua"))()
+    """
+    try:
+        loader_path = os.path.join(os.path.dirname(__file__), "..", "roblox", "client.lua")
+        with open(loader_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        return Response(content, mimetype="text/plain")
+    except Exception as e:
+        logger.error("Failed to serve loader.lua: %s", e)
+        return "error: could not load loader script", 500
 
 
 @app.route("/generate", methods=["POST"])
@@ -222,12 +247,33 @@ def check():
 
     result = validate_key(key, hwid=hwid)
 
+    # If valid, include the script payload
+    if result["status"] == "valid" and MAIN_SCRIPT_URL:
+        now = time.time()
+        if _payload_cache["content"] and _payload_cache["expiry"] > now:
+            result["payload"] = _payload_cache["content"]
+        else:
+            try:
+                resp = requests.get(MAIN_SCRIPT_URL, timeout=10)
+                if resp.status_code == 200:
+                    _payload_cache["content"] = resp.text
+                    _payload_cache["expiry"]  = now + PAYLOAD_CACHE_TTL
+                    result["payload"] = resp.text
+                else:
+                    logger.error("Failed to fetch payload from Pastebin: %d", resp.status_code)
+            except Exception as e:
+                logger.error("Exception while fetching payload: %s", e)
+
     # Attach a simple HMAC-style response tag so the Lua client can verify
     # the response hasn't been spoofed locally (uses shared secret).
     import hmac, hashlib
+    # We include the payload presence in the signature for security
+    payload_check = "p+" if result.get("payload") else "p-"
+    sig_raw = f"{key}:{result['status']}:{payload_check}"
+    
     sig = hmac.new(
         API_MASTER_TOKEN.encode(),
-        f"{key}:{result['status']}".encode(),
+        sig_raw.encode(),
         hashlib.sha256,
     ).hexdigest()[:16]
     result["sig"] = sig

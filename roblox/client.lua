@@ -28,14 +28,9 @@
 -- ──────────────────────────────────────────────────────────────────────────
 local API_URL = "https://roblox-keys-b10k.onrender.com/check"
    -- Flask /check endpoint
-local API_SECRET = "change_me_super_secret_token"        -- Same as API_MASTER_TOKEN
+local API_SECRET = "bfa3ba6b4cdc5584d1f60865f86087118a782500a8c987304bc03a14ad7185b1"
 
--- The main script loaded ONLY on successful validation.
--- Option A: URL to a raw Lua script (uses loadstring)
-local MAIN_SCRIPT_URL = "https://your-cdn.com/main.lua"
--- Option B: Embed your main logic inside the `runMainScript()` function below.
---           Switch USE_REMOTE_PAYLOAD to false in that case.
-local USE_REMOTE_PAYLOAD = true
+-- (Main script is now delivered from the server - no URL needed here)
 
 -- ──────────────────────────────────────────────────────────────────────────
 -- Services
@@ -68,10 +63,11 @@ end
 -- was not spoofed by a local proxy / memory edit.
 -- The sig is: SHA256(API_SECRET + ":" + key + ":" + status)[:16]
 -- ──────────────────────────────────────────────────────────────────────────
-local function computeSig(key, status)
+local function computeSig(key, status, hasPayload)
     -- Roblox/executors don't expose a native SHA256 — we do a best-effort
     -- lightweight polynomial hash. For production, host a signed payload instead.
-    local raw = API_SECRET .. ":" .. key .. ":" .. status
+    local pCheck = hasPayload and "p+" or "p-"
+    local raw = API_SECRET .. ":" .. key .. ":" .. status .. ":" .. pCheck
     local h   = 5381
     for i = 1, #raw do
         h = (h * 33 + string.byte(raw, i)) % 2^32
@@ -81,10 +77,12 @@ local function computeSig(key, status)
 end
 
 -- ──────────────────────────────────────────────────────────────────────────
--- Key input prompt
--- Shows a simple UI to ask the user to paste their key.
--- ──────────────────────────────────────────────────────────────────────────
 local function promptForKey()
+    -- NEW: Check for the 1-line loader global variable first
+    if _G.script_key and #_G.script_key > 10 then
+        return _G.script_key
+    end
+
     -- Try to read from a previously saved key file (executor writefile/readfile)
     if readfile and writefile then
         local ok, saved = pcall(readfile, "license_key.txt")
@@ -179,24 +177,16 @@ end
 -- ──────────────────────────────────────────────────────────────────────────
 -- Main validation flow
 -- ──────────────────────────────────────────────────────────────────────────
-local function runMainScript()
-    if USE_REMOTE_PAYLOAD then
-        -- Load main script from CDN (requires loadstring to be enabled)
-        local ok, mainCode = pcall(game.HttpGetAsync, game, MAIN_SCRIPT_URL)
-        if not ok or not mainCode then
-            error("[License] Failed to fetch main script payload. Check MAIN_SCRIPT_URL.")
-            return
-        end
-        local fn, err = loadstring(mainCode)
+local function runMainScript(payload)
+    if payload then
+        local fn, err = loadstring(payload)
         if not fn then
-            error("[License] Failed to parse main script: " .. tostring(err))
+            error("[License] Failed to parse script payload: " .. tostring(err))
             return
         end
         fn()
     else
-        -- ── Embed your main script logic here ──
-        print("[License] Running main script (embedded mode).")
-        -- ... your code goes here ...
+        error("[License] Server did not provide a script payload.")
     end
 end
 
@@ -235,7 +225,8 @@ local function validate()
     end
 
     -- 5. Anti-tamper: verify signature
-    local expectedSig = computeSig(key, data.status or "")
+    local hasPayload = (data.payload ~= nil)
+    local expectedSig = computeSig(key, data.status or "", hasPayload)
     if data.sig ~= expectedSig then
         -- Signature mismatch: could be a proxy spoofing a valid response
         error("[License] ⚠️ Response integrity check failed. Do not bypass the license system.")
@@ -246,7 +237,7 @@ local function validate()
     local status = data.status
     if status == "valid" then
         print("[License] ✅ Key validated! Loading script …")
-        runMainScript()
+        runMainScript(data.payload)
     elseif status == "expired" then
         error("[License] ❌ Your license key has expired. Purchase a new one.")
     elseif status == "revoked" then
