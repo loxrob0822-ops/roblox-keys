@@ -1,0 +1,324 @@
+# 🚀 Step-by-Step Deployment Guide
+
+Follow every step in order. Each section builds on the previous one.
+
+---
+
+## PART 1 — Prerequisites
+
+### Step 1 — Install Python
+
+1. Go to [https://www.python.org/downloads/](https://www.python.org/downloads/)
+2. Download **Python 3.11+**
+3. Run the installer — **tick "Add Python to PATH"** before clicking Install
+4. Verify in PowerShell:
+
+```powershell
+python --version
+# Expected: Python 3.11.x or higher
+```
+
+---
+
+## PART 2 — Create Your Discord Bot
+
+### Step 2 — Create the application
+
+1. Go to [https://discord.com/developers/applications](https://discord.com/developers/applications)
+2. Click **"New Application"** → name it (e.g. `LicenseBot`) → Create
+3. Go to **Bot** (left sidebar) → Click **"Add Bot"** → Confirm
+
+### Step 3 — Copy your bot token
+
+1. Still on the **Bot** page → click **"Reset Token"** → copy it
+2. Save it somewhere safe — you'll need it in Step 7
+
+> [!WARNING]
+> Never share your bot token. Anyone with it can control your bot.
+
+### Step 4 — Enable required intents
+
+On the **Bot** page, scroll to **Privileged Gateway Intents** and enable:
+- ✅ **Server Members Intent**
+- ✅ **Message Content Intent**
+
+Click **Save Changes**.
+
+### Step 5 — Invite the bot to your server
+
+1. Go to **OAuth2 → URL Generator** (left sidebar)
+2. Scopes: tick `bot`
+3. Bot Permissions: tick `Send Messages`, `Read Messages/View Channels`, `Embed Links`, `Read Message History`
+4. Copy the generated URL → open it in your browser → select your server → Authorize
+
+### Step 6 — Get your log channel ID
+
+1. In Discord, go to **Settings → Advanced → Enable "Developer Mode"**
+2. Right-click your desired log channel → **"Copy Channel ID"**
+3. Save this number
+
+---
+
+## PART 3 — Generate a Secret Token
+
+### Step 7 — Create the shared API token
+
+Open PowerShell and run:
+
+```powershell
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+Copy the output (looks like: `a3f9c2e1d...`). **This is your `API_MASTER_TOKEN`.**
+Both the API and the bot must use the **same value**.
+
+---
+
+## PART 4 — Configure the API
+
+### Step 8 — Set up the API .env file
+
+In your project folder, open PowerShell and run:
+
+```powershell
+cd "C:\Users\raini\OneDrive\Desktop\project beta"
+copy api\.env.example api\.env
+```
+
+Then open `api\.env` in Notepad (or VS Code) and fill it in:
+
+```
+API_MASTER_TOKEN=paste_your_token_from_step_7_here
+PORT=5000
+```
+
+### Step 9 — Install API dependencies
+
+```powershell
+pip install -r api/requirements.txt
+```
+
+### Step 10 — Start the Flask API
+
+```powershell
+python api/app.py
+```
+
+You should see:
+```
+INFO  Starting Flask API on port 5000 …
+INFO  Database initialized at ...database/data.db
+```
+
+> [!NOTE]
+> Leave this PowerShell window open. The API must keep running while the bot is active.
+> Open a **second** PowerShell window for the next steps.
+
+---
+
+## PART 5 — Configure the Discord Bot
+
+### Step 11 — Set up the bot .env file
+
+In a **new** PowerShell window:
+
+```powershell
+cd "C:\Users\raini\OneDrive\Desktop\project beta"
+copy bot\.env.example bot\.env
+```
+
+Open `bot\.env` and fill in all values:
+
+```
+DISCORD_BOT_TOKEN=paste_your_bot_token_from_step_3_here
+API_MASTER_TOKEN=paste_your_token_from_step_7_here
+API_BASE_URL=http://127.0.0.1:5000
+LOG_CHANNEL_ID=paste_your_channel_id_from_step_6_here
+ALLOWED_ROLES=Admin,Staff
+```
+
+> [!IMPORTANT]
+> `ALLOWED_ROLES` must match **exact role names** in your Discord server (case-sensitive).  
+> Example: If your role is called "Administrator" not "Admin", change it accordingly.
+
+### Step 12 — Install bot dependencies
+
+```powershell
+pip install -r bot/requirements.txt
+```
+
+### Step 13 — Start the Discord bot
+
+```powershell
+python bot/bot.py
+```
+
+You should see:
+```
+INFO  Bot logged in as LicenseBot#1234 (...)
+```
+
+The bot is now online in your server. ✅
+
+---
+
+## PART 6 — Test Everything Locally
+
+### Step 14 — Test the API directly
+
+Open a **third** PowerShell window:
+
+```powershell
+# Test health check (no auth needed)
+curl http://127.0.0.1:5000/health
+
+# Generate a test key
+curl -X POST http://127.0.0.1:5000/generate `
+  -H "Authorization: Bearer your_API_MASTER_TOKEN" `
+  -H "Content-Type: application/json" `
+  -d '{"discord_id": "123456789", "duration": "7d"}'
+```
+
+### Step 15 — Test the Discord bot
+
+In your Discord server, type in any channel the bot can see:
+
+```
+!genkey @YourName lifetime
+```
+
+You should receive a DM with a license key, and the audit channel should log the action.
+
+```
+!keyinfo LIC-XXXX-XXXX-XXXX-XXXX
+!revoke  LIC-XXXX-XXXX-XXXX-XXXX
+```
+
+---
+
+## PART 7 — Configure the Roblox Client
+
+### Step 16 — Edit client.lua
+
+Open `roblox/client.lua` and change these two lines at the top:
+
+```lua
+local API_URL    = "http://127.0.0.1:5000/check"  -- change to your public URL in production
+local API_SECRET = "paste_your_API_MASTER_TOKEN_here"
+```
+
+### Step 17 — Set up your main script (choose one)
+
+**Option A — Remote payload (most secure):**
+```lua
+local MAIN_SCRIPT_URL  = "https://pastebin.com/raw/YOUR_PASTE_ID"  -- or any raw URL
+local USE_REMOTE_PAYLOAD = true
+```
+Host your protected script at a raw URL (Pastebin, GitHub Gist raw, or your own CDN).
+
+**Option B — Embedded (simpler):**
+```lua
+local USE_REMOTE_PAYLOAD = false
+```
+Paste your script logic directly inside the `runMainScript()` function in `client.lua`.
+
+### Step 18 — Run in Roblox
+
+Paste the full contents of `client.lua` into your executor and execute it in-game.
+The UI prompt will appear asking for a key.
+
+---
+
+## PART 8 — Production Deployment (Public Server)
+
+> Do this when you want the system to be accessible from anywhere (required for real Roblox clients).
+
+### Step 19 — Deploy the API to Railway (easiest, free tier)
+
+1. Create a free account at [https://railway.app](https://railway.app)
+2. Click **"New Project" → "Deploy from GitHub repo"**
+3. Push your project to a GitHub repo first:
+   ```powershell
+   cd "C:\Users\raini\OneDrive\Desktop\project beta"
+   git init
+   git add .
+   git commit -m "Initial commit"
+   # Create a repo on github.com, then:
+   git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO.git
+   git push -u origin main
+   ```
+4. In Railway, select your repo
+5. Railway will detect the Python project — set the **Start Command** to:
+   ```
+   python api/app.py
+   ```
+6. Go to **Variables** → add your environment variables:
+   - `API_MASTER_TOKEN` = your token
+   - `PORT` = 5000
+7. Click **Deploy** → Railway gives you a public URL like `https://yourapp.up.railway.app`
+
+### Step 20 — Update client.lua with the public URL
+
+```lua
+local API_URL = "https://yourapp.up.railway.app/check"
+```
+
+> [!IMPORTANT]
+> Roblox **requires HTTPS**. Railway provides this automatically. Plain `http://` URLs will be blocked by Roblox's HttpService.
+
+### Step 21 — Update bot .env for production
+
+```
+API_BASE_URL=https://yourapp.up.railway.app
+```
+
+Restart the bot after saving.
+
+---
+
+## PART 9 — Keep Everything Running (Windows, no server)
+
+### Step 22 — Auto-start on Windows (optional)
+
+Create a batch file `start_all.bat` in your project folder:
+
+```bat
+@echo off
+start "License API" cmd /k "python api/app.py"
+start "License Bot" cmd /k "python bot/bot.py"
+```
+
+Double-click it to start both services at once.
+
+---
+
+## ✅ Deployment Checklist
+
+- [ ] Python 3.11+ installed
+- [ ] Discord bot created with correct intents enabled
+- [ ] Bot invited to server with correct permissions
+- [ ] `api/.env` filled in with `API_MASTER_TOKEN`
+- [ ] `bot/.env` filled in with matching token, bot token, log channel ID, and role names
+- [ ] `pip install -r api/requirements.txt` done
+- [ ] `pip install -r bot/requirements.txt` done
+- [ ] `python api/app.py` running in terminal
+- [ ] `python bot/bot.py` running in terminal
+- [ ] `!genkey` tested in Discord
+- [ ] `/check` endpoint tested with curl
+- [ ] `client.lua` configured with correct `API_URL` and `API_SECRET`
+- [ ] (Production) API deployed to Railway with HTTPS URL
+- [ ] (Production) `client.lua` updated with public HTTPS URL
+
+---
+
+## 🆘 Common Issues
+
+| Problem | Fix |
+|---------|-----|
+| `ModuleNotFoundError: flask` | Run `pip install -r api/requirements.txt` |
+| `ModuleNotFoundError: discord` | Run `pip install -r bot/requirements.txt` |
+| Bot says "❌ You don't have permission" | Role name in `.env` doesn't match server role exactly |
+| Bot online but not responding | Message Content Intent not enabled in Dev Portal (Step 4) |
+| Roblox HttpService blocked | You're using `http://` — switch to `https://` (Railway/Nginx) |
+| `KeyError: DISCORD_BOT_TOKEN` | You forgot to copy `.env.example` to `.env` |
+| Port 5000 already in use | Change `PORT=5001` in `api/.env` and update `bot/.env` `API_BASE_URL` |

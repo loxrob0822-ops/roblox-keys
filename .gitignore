@@ -1,0 +1,28 @@
+# ──────────────────────────────
+# Secrets — NEVER commit these
+# ──────────────────────────────
+api/.env
+bot/.env
+
+# ──────────────────────────────
+# Auto-generated files
+# ──────────────────────────────
+database/data.db
+api/api.log
+bot/bot.log
+bot/license_key.txt
+
+# ──────────────────────────────
+# Python
+# ──────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+dist/
+build/
+*.egg-info/
