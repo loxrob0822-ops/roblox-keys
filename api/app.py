@@ -128,6 +128,17 @@ def _format_key_info(row: dict) -> dict:
 # Routes
 # ─────────────────────────────────────────────
 
+@app.route("/", methods=["GET"])
+def index():
+    """Main homepage - prevents 404."""
+    return jsonify({
+        "name": "Luarmor-Style Licensing API",
+        "status": "online",
+        "version": "1.0.0",
+        "documentation": "See Discord bot for commands."
+    })
+
+
 @app.route("/health", methods=["GET"])
 def health():
     """Simple health-check — no auth required."""
