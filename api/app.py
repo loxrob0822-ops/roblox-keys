@@ -103,6 +103,18 @@ def require_token(f):
     return decorated
 
 
+import traceback
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """Catch-all for any unhandled errors, returning the traceback to the user."""
+    logger.exception("!!! UNHANDLED EXCEPTION !!!: %s", e)
+    return jsonify({
+        "error": "Internal Server Error",
+        "details": str(e),
+        "traceback": traceback.format_exc()
+    }), 500
+
 # ─────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────
