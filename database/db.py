@@ -100,7 +100,7 @@ def _duration_to_seconds(duration: str) -> float | None:
 
     # Smart mapping
     multipliers = {
-        60:      ["m", "min", "mins", "minute", "minutes"],
+        60:      ["m", "min", "mins", "minutes", "mis", "mi"],
         3600:    ["h", "hr", "hrs", "hour", "hours"],
         86400:   ["d", "day", "days"],
         2592000: ["mo", "month", "months", "mon"],
