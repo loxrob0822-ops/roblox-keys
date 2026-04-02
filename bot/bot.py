@@ -286,9 +286,9 @@ async def listkeys(interaction: discord.Interaction, member: Optional[discord.Me
 async def setup_panel(interaction: discord.Interaction):
     """Post the persistent Control Panel embed."""
     embed = discord.Embed(
-        title="💠 Astrix Hub | Control Panel", 
+        title="💠 Ranyel Hub | Control Panel", 
         description=(
-            "Welcome to the **Astrix Pls Donate** access panel.\n\n"
+            "Welcome to the **Ranyel Hub** access panel.\n\n"
             "If you have already purchased a license, click the button below to retrieve your script and key instantly.\n\n"
             "**Note:** Your key must be active and whitelisted by an Admin."
         ),
