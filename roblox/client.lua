@@ -26,7 +26,7 @@
 -- ──────────────────────────────────────────────────────────────────────────
 -- Config  (change these before deploying)
 -- ──────────────────────────────────────────────────────────────────────────
-local API_URL = "https://roblox-keys-b10k.onrender.com/check"
+local API_URL = "https://roblox-keys-production.up.railway.app/check"
    -- Flask /check endpoint
 local API_SECRET = "bfa3ba6b4cdc5584d1f60865f86087118a782500a8c987304bc03a14ad7185b1"
 
