@@ -180,8 +180,19 @@ def health():
 def loader():
     """
     Serve the Roblox loader script.
-    Roblox users run: loadstring(game:HttpGet(".../loader.lua"))()
+    Protected from browsers: returns 404 for web browsers.
     """
+    ua = request.headers.get("User-Agent", "").lower()
+    
+    # Common browser strings
+    is_browser = any(x in ua for x in ["mozilla", "chrome", "safari", "applewebkit", "edge", "opera"])
+    # Roblox typically includes 'Roblox' in its UA
+    is_roblox  = "roblox" in ua
+
+    # Hide from browsers unless explicitly identify as Roblox (standard game:HttpGet behavior)
+    if is_browser and not is_roblox:
+        return "404 Not Found", 404
+
     try:
         loader_path = os.path.join(os.path.dirname(__file__), "..", "roblox", "client.lua")
         with open(loader_path, "r", encoding="utf-8") as f:
