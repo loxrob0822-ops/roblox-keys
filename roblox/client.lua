@@ -173,16 +173,30 @@ local function validate()
     local body = HttpService:JSONEncode({ key = key, hwid = hwid })
     print("[License] ⏳ Validating...")
     
-    local ok, response = pcall(function()
-        return HttpService:PostAsync(API_URL, body, Enum.HttpContentType.ApplicationJson)
+    local responseBody
+    local ok, err = pcall(function()
+        -- Attempt to use executor's native request if available (more stable)
+        local req = (syn and syn.request) or (http and http.request) or http_request or (Fluxus and Fluxus.request) or request
+        if req then
+            local res = req({
+                Url = API_URL,
+                Method = "POST",
+                Headers = { ["Content-Type"] = "application/json" },
+                Body = body
+            })
+            responseBody = res.Body
+        else
+            -- Fallback to standard HttpService
+            responseBody = HttpService:PostAsync(API_URL, body, Enum.HttpContentType.ApplicationJson)
+        end
     end)
 
-    if not ok then
+    if not ok or not responseBody then
         notify("Error", "Server connection failed.", 5)
-        error("[License] ❌ Network Error: " .. tostring(response))
+        error("[License] ❌ Connection Error: " .. tostring(err or "Response Empty"))
     end
 
-    local data = HttpService:JSONDecode(response)
+    local data = HttpService:JSONDecode(responseBody)
     print("[License] 📡 Response received: " .. tostring(data.status))
 
     local sig = computeSig(key, data.status or "", data.payload ~= nil)
