@@ -105,6 +105,16 @@ def require_token(f):
 
 import traceback
 
+def djb2_hash(secret, key, status, p_check):
+    """Simple 32-bit hash matching the Lua client's signature logic."""
+    raw = f"{secret}:{key}:{status}:{p_check}"
+    h = 5381
+    for char in raw:
+        # (h * 33) + char
+        h = ((h << 5) + h) + ord(char)
+        h &= 0xFFFFFFFF  # Ensure it stays within 32-bit unsigned range
+    return f"{h:08x}"  # 8 hex chars (32 bits)
+
 @app.errorhandler(Exception)
 def handle_exception(e):
     """Catch-all for any unhandled errors, returning the traceback to the user."""
@@ -260,34 +270,37 @@ def check():
     result = validate_key(key, hwid=hwid)
 
     # If valid, include the script payload
-    if result["status"] == "valid" and MAIN_SCRIPT_URL:
+    if result["status"] == "valid":
+        content = None
         now = time.time()
+        
+        # 1. Try Cache
         if _payload_cache["content"] and _payload_cache["expiry"] > now:
-            result["payload"] = _payload_cache["content"]
-        else:
+            content = _payload_cache["content"]
+        elif MAIN_SCRIPT_URL:
+            # 2. Try Fetch
             try:
                 resp = requests.get(MAIN_SCRIPT_URL, timeout=10)
                 if resp.status_code == 200:
-                    _payload_cache["content"] = resp.text
+                    content = resp.text
+                    _payload_cache["content"] = content
                     _payload_cache["expiry"]  = now + PAYLOAD_CACHE_TTL
-                    result["payload"] = resp.text
                 else:
-                    logger.error("Failed to fetch payload from Pastebin: %d", resp.status_code)
+                    logger.error("Failed to fetch payload: %d", resp.status_code)
             except Exception as e:
                 logger.error("Exception while fetching payload: %s", e)
 
-    # Attach a simple HMAC-style response tag so the Lua client can verify
-    # the response hasn't been spoofed locally (uses shared secret).
-    import hmac, hashlib
-    # We include the payload presence in the signature for security
+        # 3. Fallback to a default Success script if no payload found
+        if not content:
+            content = '-- [LICENSE] Default Success Script\nprint("✅ Script loaded successfully from the license server!")\ngame:GetService("StarterGui"):SetCore("SendNotification", {Title="License System", Text="✅ Access Granted! Your script is now running.", Duration=10})'
+            logger.info("Delivering default fallback script.")
+        
+        result["payload"] = content
+
+    # Attach a simple signature so the Lua client can verify the response.
+    # We use a DJB2 hash matching the client's implementation.
     payload_check = "p+" if result.get("payload") else "p-"
-    sig_raw = f"{key}:{result['status']}:{payload_check}"
-    
-    sig = hmac.new(
-        API_MASTER_TOKEN.encode(),
-        sig_raw.encode(),
-        hashlib.sha256,
-    ).hexdigest()[:16]
+    sig = djb2_hash(API_MASTER_TOKEN, key, result["status"], payload_check)
     result["sig"] = sig
 
     http_code = 200 if result["status"] == "valid" else 401
