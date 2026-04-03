@@ -45,10 +45,14 @@ CREATE TABLE IF NOT EXISTS usage_logs (
 
 
 def get_connection() -> sqlite3.Connection:
-    """Return a thread-safe SQLite connection with row_factory set."""
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    """Return a thread-safe SQLite connection with robust settings."""
+    # Use a longer timeout for concurrent writes (5.0s)
+    conn = sqlite3.connect(DB_PATH, timeout=5.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    # WAL mode handles concurrent readers/writers safely
     conn.execute("PRAGMA journal_mode=WAL;")
+    # Synchronous NORMAL balance performance and safety
+    conn.execute("PRAGMA synchronous=NORMAL;")
     return conn
 
 

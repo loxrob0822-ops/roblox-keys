@@ -88,6 +88,8 @@ local function promptForKey()
     if autoKey and type(autoKey) == "string" and #autoKey > 10 then
         print("[License] ✅ Key found: " .. tostring(autoKey):sub(1,10) .. "...")
         notify("Key Detected", "Automatically using script_key.", 2)
+        -- Persistent Save: Save any valid key found in environment to file for next time
+        if writefile then pcall(writefile, "license_key.txt", autoKey) end
         return autoKey
     end
 
